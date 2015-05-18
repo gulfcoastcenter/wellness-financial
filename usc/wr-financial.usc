@@ -1,0 +1,351 @@
+'4/8
+'add call to _ELIGSTR in report mode
+
+%define true 1
+%define false 0
+
+%version 01.0.001 04/08/14 GCC
+
+start wr-financial(parmfile, option, client, retcode)
+
+parmfile          is x
+option            is x
+client            is x
+retcode           is b
+
+%include gcc_groups
+editmode          is n
+
+'client info
+c.dst[]           is x
+c.dst.val[]       is x
+c.dst.new[]       is x
+
+c.address[]       is x
+c.address.val[]   is x
+c.address.new[]   is x
+
+'responsible party
+rp.dst[]          is x
+rp.val[]          is x
+rp.new[]          is x
+
+fs.dst[]          is x
+fs.val[]          is x
+fs.new[]          is x
+
+ic.dst[]          is x
+ic.val[]          is x
+ic.new[]          is x
+
+'service array
+services[]        is x
+
+template          is x
+report            is x
+
+l-c.dst           is b
+l-c.address       is b
+l-rp.dst          is b
+l-fs.dst          is b
+l-ic.dst          is b
+l-client          is b
+
+c.el              is r
+c.el.fs           is b
+c.el.ef.dt        is d
+c.el.la.dt        is d
+
+el_rec[]          is n
+el_effd[]         is d
+el_fs[]           is b
+el_ef[]           is d
+el_la[]           is d
+
+i                 is b
+rc                is b
+bool              is b     '0 = false, 1 = true
+snapID           is x
+elig_str          is x
+fin_date          is d
+ReportID          is x
+ReportID = "WRFINA"
+   %include inc_sysLibDef
+gosub __INIT
+
+
+'uhp template
+do while 1 = 1
+   gosub _PRE
+   uhp(template)
+   
+   select $endbutton
+      case "CANCEL" return
+      case "SUBMIT"  gosub _VALIDATE
+   endselect
+   
+enddo
+
+return
+
+_PRE:
+   gosub _ELIGSTR
+goback
+
+_ELIGSTR:
+   $clear(elig_str)
+   rc = $dbReadToArray(2,client,c.el,c.el.fs,c.el.ef.dt,c.el.la.dt,
+      el_rec[],el_effd[],el_fs[],,el_ef[],,el_la[])
+   
+   i = 0
+   elig_str = "<table class='tight' width='100%'>"
+      + "<TR class='datatag'>"
+      + "<TD>FS</TD>"
+      + "<TD>Desc</TD>"
+      + "<TD>Eff Date</TD>"
+      + "<TD>Lapse</TD>"
+      + "</TR>"
+   do while i++ < $maxarray(el_effd[])
+      if el_la[i] !dp or el_la[i] >= $today then
+         elig_str += "<TR>"
+            + "<TD>" + $fmt(el_fs[i],"LZZZ9") + "</TD>"
+            + "<TD>" + $fs(el_fs[i],"D") + "</TD>"
+            + "<TD>" + $fmt(el_ef[i],"MM/DD/YY") + "</TD>"
+            + "<TD>" + $fmt(el_la[i],"MM/DD/YY") + "</TD>"
+            + "</TR>"
+      endif
+   enddo
+   elig_str += "</TABLE>"
+goback
+
+_VALIDATE:
+   'do validation
+   'gosub _CALCFS
+   
+   'if validated
+   gosub _ELIGSTR
+   uhp(report)
+   select $endbutton
+      case "CANCEL" 
+        or "SUBMIT" goback
+      case other
+         snapID = snap_handle:sn_GetSnapID() 
+         if snapID dp then
+            'success
+            gosub _WRITE
+            '$brmsg("snapID success post_WRITE",1,"CW")
+            rc = snap_handle:sn_viewLatest(ReportID,,client,2,$ScriptID)
+            return
+         else
+            'fail
+            $brmsg("snap fail",1,"CW")
+            goback
+         endif
+   endselect
+goback
+
+'_CALCFS:
+'goback
+
+_WRITE:
+   
+   'don't add layers for standalone dsts
+   removeSame(c.dst.val[], c.dst.new[], c.dst[])
+   if $maxarray(c.dst[]) > 0 then
+      rc = l-c.dst:add(client, c.dst[], c.dst.new[])
+   endif
+   
+   'only add record layers when something has changed
+   bool = hasChanged(c.address.val[], c.address.new[])
+   if (bool = true) then
+      rc = l-c.address:add(client,c.address[], c.address.new[])
+   endif
+   
+   bool = hasChanged(rp.val[], rp.new[])
+   if (bool = true) then
+      rc = l-rp.dst:add(client,rp.dst[], rp.new[])
+   endif
+   
+   removeSame(ic.val[], ic.new[], ic.dst[])
+   if $maxarray(ic.dst[]) > 0 then
+      rc = l-ic.dst:add(client, ic.dst[], ic.new[])
+   endif
+goback
+
+
+__INIT:
+   fin_date = $today
+   if it_staff = "Y" then
+      editmode = 4
+   elseif billing_staff = "Y" then
+      editmode = 3
+   elseif benefit_advisor = "Y" then
+      editmode = 2
+   else
+      editmode = 1
+   endif
+
+   if option = "_FIN" and client dp then
+      "lib_FINELIG":get_elig(client,,editmode)
+      ', checked, editmode)
+      return
+   endif
+   
+   'default the var names
+   template = "/c0/forms/wr-financial.uhp"
+   report = "/c0/forms/wr-financial-rpt.uhp"
+   
+   'use c.dst for standalone client dsts
+   i = 0
+   c.dst[++i] = "C.FN"
+   c.dst[++i] = "C.LN"
+   c.dst[++i] = "C.BD"
+   c.dst[++i] = "C.SSN"
+   c.dst[++i] = "C.SEX"
+   
+   'client address record
+   i = 0
+   c.address[++i] = "C.ADDR1"
+   c.address[++i] = "C.ADDR2"
+   c.address[++i] = "C.CITY"
+   c.address[++i] = "C.STATE"
+   c.address[++i] = "C.ZIP"
+   c.address[++i] = "C.AREACODE"
+   c.address[++i] = "C.TEL"
+   
+   'responsible party record
+   i = 0
+   rp.dst[++i] = "C.RP.FN"
+   rp.dst[++i] = "C.RP.LN"
+   rp.dst[++i] = "C.RP.ADDR1"
+   rp.dst[++i] = "C.RP.ADDR2"
+   rp.dst[++i] = "C.RP.CITY"
+   rp.dst[++i] = "C.RP.STATE"
+   rp.dst[++i] = "C.RP.ZIP"
+   rp.dst[++i] = "C.RP.TEL"
+   
+   i = 0
+   fs.dst[++i] = "C.EL.EF.DT"
+   fs.dst[++i] = "C.EL.LA.DT"
+   fs.dst[++i] = "C.EL.ID.1"
+   fs.dst[++i] = "C.EL.FS"
+   fs.dst[++i] = "C.EL.DISC"
+   fs.dst[++i] = "C.EG.INSLN"
+   fs.dst[++i] = "C.EG.INSA1"
+   fs.dst[++i] = "C.EG.INSA2"
+   fs.dst[++i] = "C.EG.INSCY"
+   fs.dst[++i] = "C.EG.INSZP"
+   fs.dst[++i] = "C.EG.INSPH"
+   
+   i = 0
+   ic.dst[++i] = "C.INCOME"
+   ic.dst[++i] = "C.FAM.SIZE"
+   ic.dst[++i] = "C.FIN.INT"
+   ic.dst[++i] = "C.WR.TIER"
+   
+   getparm(parmfile)
+   getoption(option)
+   
+   (void)$loadlib(l-client, "lib_CLIENT")
+   'get the regid
+   if l-client:pickClient(client,"Y") > 0 then return endif
+   
+   'read
+   if $loadlib(l-c.dst, "lib_DST") > 0 then return endif
+   if $loadlib(l-c.address, "lib_DST") > 0 then return endif
+   if $loadlib(l-rp.dst, "lib_DST") > 0 then return endif
+   'if $loadlib(l-fs.dst, "lib_DST") > 0 then return endif
+   if $loadlib(l-ic.dst, "lib_DST") > 0 then return endif
+   
+   'standalone records
+   rc = l-c.dst:read(client, c.dst[])
+   c.dst.val[] = l-c.dst:dst(c.dst[])
+   c.dst.new[] = c.dst.val[]
+   
+   'client address
+   rc = l-c.address:read(client, c.address[])
+   c.address.val[] = l-c.address:dst(c.address[])
+   c.address.new[] = c.address.val[]
+   
+   'responsible party
+   rc = l-rp.dst:read(client, rp.dst[])
+   rp.val[] = l-rp.dst:dst(rp.dst[])
+   rp.new[] = rp.val[]
+   
+   'eligibility record
+   'rc = l-fs.dst:read(client, fs.dst[])
+   'fs.val[] = l-fs.dst:dst(fs.dst[])
+   'fs.new[] = fs.val[]
+   
+   rc = l-ic.dst:read(client, ic.dst[])
+   ic.val[] = l-ic.dst:dst(ic.dst[])
+   ic.new[] = ic.val[]
+
+goback
+end wr-financial
+
+%include inc_GetParm
+%include inc_GetOption
+%include inc_uhp
+
+dynamic FUNCTION putNewAddress(-lib, -street, -city, -state, -zip) is b
+-lib           is b
+-street        is x
+-city          is x
+-state         is x
+-zip           is x
+
+rc             is b
+address-dsts[] is x
+address-vals[] is x
+
+rc = $arrpush(address-dsts[], -street-dst)
+rc = $arrpush(address-dsts[], -city-dst)
+rc = $arrpush(address-dsts[], -state-dst)
+rc = $arrpush(address-dsts[], -zip-dst)
+
+rc = $arrpush(address-vals[], -street)
+rc = $arrpush(address-vals[], -city)
+rc = $arrpush(address-vals[], -state)
+rc = $arrpush(address-vals[], -zip)
+
+rc = -lib:add(client,address-dsts[],address-vals[])
+
+putNewAddress = rc
+
+end putNewAddress
+
+dynamic FUNCTION hasChanged(original[], new[]) is b
+original[]     is x
+new[]          is x
+
+i              is b
+
+i = 0
+do while i++ < $maxarray(original[])
+   if original[i] != new[i] then
+      hasChanged = 1
+      return
+   endif
+enddo
+
+end hasChanged
+
+dynamic FUNCTION removeSame(original[], new[], dst[]) is x
+original[]     is x
+new[]          is x
+dst[]          is x
+i              is b
+
+$allowupdate(new[], dst[])
+
+i = 0
+do while i++ < $maxarray(original[])
+   if original[i] = new[i] then
+      '(void)$arrRemove(new[i], 1, dst[i])
+      $clear(new[i], dst[i])
+   endif
+enddo
+'$arrCompress(new[])
+'$arrCompress(dst[])
+end removeSame

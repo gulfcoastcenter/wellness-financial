@@ -288,8 +288,15 @@ end wr-financial
 %include inc_GetOption
 %include inc_uhp
 
-dynamic FUNCTION putNewAddress(-lib, -street, -city, -state, -zip) is b
+dynamic FUNCTION putNewAddress(-lib, -client, 
+   -street, -street-dst,
+   -city, -city-dst,
+   -state, -state-dst,
+   -zip, -zip-dst
+) is b
+
 -lib           is b
+-client        is x
 -street        is x
 -city          is x
 -state         is x
@@ -309,7 +316,7 @@ rc = $arrpush(address-vals[], -city)
 rc = $arrpush(address-vals[], -state)
 rc = $arrpush(address-vals[], -zip)
 
-rc = -lib:add(client,address-dsts[],address-vals[])
+rc = -lib:add(-client, address-dsts[],address-vals[])
 
 putNewAddress = rc
 

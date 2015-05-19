@@ -1,0 +1,170 @@
+<$html uhpversion='4'>
+<$body submitlabel='Next' cancellabel='Cancel'>
+   <style>
+      div {
+         padding: 1%;
+      }
+      .page {
+         text-align: center;
+      }
+      .section {
+         border: solid gray 1px;
+         border-radius: 15px;
+         margin: 1% auto;
+         text-align: center;
+         padding: 1%;
+         width: 80%;
+      }
+      .info {
+         border-radius: 15px;
+         background-color: lightgray;
+         margin: 0 auto;
+         text-align: center;
+         padding: 1%;
+         width: 90%;
+      }
+   </style>
+   <div style="display:none">
+   <$input type='text' uhp='client' id='client' name='client' />
+   </div>
+   <div class='page'>
+      <h1>Wellness and Recovery Insurance Verification</h1>
+      <div class='section'>
+         <h2>Client Demographics</h2>
+         <div class='info'>
+            First Name: <$input type='text' uhp='c.dst.new' idx='1' edit='X' />
+            Last Name: <$input type='text' uhp='c.dst.new' idx='2' edit='X' />
+            <br />
+            DOB: <$input type='text' uhp='c.dst.new' idx='3' edit='CAL' />
+            SSN: <$input type='text' uhp='c.dst.new' idx='4' />
+            Gender: <$input type='text' uhp='c.dst.new' idx='5' edit='DCV``22'/>
+         </div>
+      </div>
+      <div class='section'>
+         <h2>Client Address</h2>
+         <div class='info'>
+            <div>Address: <$input id='street' type='text' uhp='c.address.new' idx='1' />
+            <$input id='street2' type='text' uhp='c.address.new' idx='2' />         </div>
+            <div>
+            <span id='city'>
+            City: <$select id='city' uhp='c.address.new' idx='3' addblank="Y" dct="47"/>
+            </span>
+            <div id='city-desc-container' style='display:none'>
+            <$input id='city-desc' type='text' uhp='c.address.new' idx='4' />
+            </div>
+            State: <$input id='state' type='text' uhp='c.address.new' idx='5' />
+            Zip: <$input id='zip' type='text' uhp='c.address.new' idx='6' />    </div>
+         </div>
+      </div>
+      <div class='section'>
+         <h2>Responsible Party</h2>
+         <div class='info'>
+            <div>First Name: <$input type='text' uhp='rp.new' idx='1' />
+            Last Name: <$input type='text' uhp='rp.new' idx='2' /> </div>
+            <div>Address: <$input type='text' uhp='rp.new' idx='3' />
+            <$input type='text' uhp='rp.new' idx='4' />            </div>
+            <div>City: <$input type='text' uhp='rp.new' idx='5' />
+            State: <$input type='text' uhp='rp.new' idx='6' />
+            Zip: <$input type='text' uhp='rp.new' idx='7' />       </div>
+         </div>
+      </div>
+      <div class='section'>
+      <h2>Eligibility</h2>
+      <button id='btn_elig' name='btn_elig'>Add Eligibility</button>
+         <div class='info'>
+            <$literal value='elig_str' />
+         </div>
+      </div>
+      <div class='section'>
+         <h2>Services</h2>
+         <div class='info'>
+            <$input type='checkbox' uhp='services' idx='1' value='Fitness Coach' id='fitness' /> Fitness Coach
+            <$input type='checkbox' uhp='services' idx='2' value='Behavior Coach' id='behavior' /> Behavior Coach
+         </div>
+         <div class='section' id='income'>
+            <h2>Income Information</h2>
+            <div class='info'>
+               Total Family Income: <$input type='text' uhp='ic.new' idx='1' />
+               <br />
+               Members of Family: <$input type='text' uhp='ic.new' idx='2' />
+            </div>
+         </div>
+      </div>
+   </div>
+   <$literal value='data' />
+   <script type='text/javascript' src='/cmhcbui/cmhcbuilocal/js/jquery-1.5.1.min.js'></script>
+   <script>
+      $('#btn_elig').click(function() { 
+         var cmd = '|S|USC|wr-financial||_FIN|' + brAcdsp.client.value + '|';
+         top.topFrame.ds(cmd,'WR Financial', 780, 550);
+      });
+
+      //var first = $('#first');
+      //var last = $('#last');
+      var street = $('#street');
+      var street2 = $('#street2');
+      var city = $('#city select');
+      var city_desc = $('#city-desc');
+      var state = $('#state');
+      var zip = $('#zip');
+
+      city.change(function() { 
+         var selected = city.children('option')
+            .filter(':selected').text(); 
+         city_desc.val(selected);
+         $('#city-desc-container').toggle(selected === 'OTHER');
+      });
+
+      var save_address = gcc.data.address.vals.length === 0;
+
+      var address_changed = function() { 
+         if (street.val() && city.val() && 
+            state.val() && zip.val()) { 
+
+            //save the client address record
+            var cmd = [
+               '|C|putNewAddress',
+               gcc.data.address.lib,
+               gcc.data.clientid,
+               street.val(),
+               gcc.data.address.dsts[0],
+               street2.val(),    
+               gcc.data.address.dsts[1],
+               city.val(),       
+               gcc.data.address.dsts[2],
+               city_desc.val(),       
+               gcc.data.address.dsts[3],
+               state.val(),
+               gcc.data.address.dsts[4],
+               zip.val(),
+               gcc.data.address.dsts[5],
+            ].join('|');
+            var rc = top.topFrame.BUIControl.callMIS(cmd, '');
+
+            //save the mail address
+            var cmd = [
+               '|C|putNewAddress',
+               gcc.data.mail.lib,
+               gcc.data.clientid,
+               street.val(),
+               gcc.data.mail.dsts[0],
+               street2.val(),    
+               gcc.data.mail.dsts[1],
+               city.val(),       
+               gcc.data.mail.dsts[2],
+               city_desc.val(),       
+               gcc.data.mail.dsts[3],
+               state.val(),
+               gcc.data.mail.dsts[4],
+               zip.val(),
+               gcc.data.mail.dsts[5],
+            ].join('|');
+            var rc = top.topFrame.BUIControl.callMIS(cmd, '');
+         }
+      };
+      if (save_address) { 
+         $('#btn_elig').one('click', address_changed);
+      }
+   </script>
+<$/body>
+<$/html>

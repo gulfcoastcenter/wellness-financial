@@ -38,6 +38,10 @@ ic.dst[]          is x
 ic.val[]          is x
 ic.new[]          is x
 
+mail.dst[]        is x
+mail.val[]        is x
+mail.new[]        is x
+
 'service array
 services[]        is x
 
@@ -50,6 +54,7 @@ l-rp.dst          is b
 l-fs.dst          is b
 l-ic.dst          is b
 l-client          is b
+l-mail.dst        is b
 
 c.el              is r
 c.el.fs           is b
@@ -62,6 +67,9 @@ el_fs[]           is b
 el_ef[]           is d
 el_la[]           is d
 
+data              is x
+delimstring       is x
+
 i                 is b
 rc                is b
 bool              is b     '0 = false, 1 = true
@@ -69,6 +77,46 @@ snapID           is x
 elig_str          is x
 fin_date          is d
 ReportID          is x
+
+'rmi variables
+rmi-lib           is b
+rmi-client        is x
+rmi-first         is x
+rmi-first-dst     is x
+rmi-last          is x
+rmi-last-dst      is x
+rmi-street        is x
+rmi-street-dst    is x
+rmi-street2       is x
+rmi-street2-dst   is x
+rmi-city          is x
+rmi-city-dst      is x
+rmi-city-desc     is x
+rmi-citydesc-dst  is x
+rmi-state         is x
+rmi-state-dst     is x
+rmi-zip           is x
+rmi-zip-dst       is x
+
+on rmi "putNewAddress" do putNewAddress(rmi-lib, 
+   rmi-client,
+   rmi-street, rmi-street-dst,
+   rmi-street2, rmi-street2-dst,
+   rmi-city, rmi-city-dst,
+   rmi-city-desc, rmi-citydesc-dst,
+   rmi-state, rmi-state-dst,
+   rmi-zip, rmi-zip-dst)
+
+on rmi "putNewRp" do putNewRp(rmi-lib, 
+   rmi-client,
+   rmi-first, rmi-first-dst,
+   rmi-last, rmi-last-dst,
+   rmi-street, rmi-street-dst,
+   rmi-street2, rmi-street2-dst,
+   rmi-city, rmi-city-dst,
+   rmi-state, rmi-state-dst,
+   rmi-zip, rmi-zip-dst)
+
 ReportID = "WRFINA"
    %include inc_sysLibDef
 gosub __INIT
@@ -89,7 +137,9 @@ enddo
 return
 
 _PRE:
+   gosub _READADDRESS
    gosub _ELIGSTR
+   gosub _BROWSERDATA
 goback
 
 _ELIGSTR:
@@ -166,6 +216,11 @@ _WRITE:
       rc = l-rp.dst:add(client,rp.dst[], rp.new[])
    endif
    
+   bool = hasChanged(mail.val[], mail.new[])
+   if (bool = true) then
+      rc = l-mail.dst:add(client,mail.dst[], mail.new[])
+   endif
+
    removeSame(ic.val[], ic.new[], ic.dst[])
    if $maxarray(ic.dst[]) > 0 then
       rc = l-ic.dst:add(client, ic.dst[], ic.new[])
@@ -192,8 +247,8 @@ __INIT:
    endif
    
    'default the var names
-   template = "/c0/forms/wr-financial.uhp"
-   report = "/c0/forms/wr-financial-rpt.uhp"
+   template = "/c1/FRSH/CUST/forms/wr-financial.uhp"
+   report = "/c1/FRSH/CUST/forms/wr-financial-rpt.uhp"
    
    'use c.dst for standalone client dsts
    i = 0
@@ -208,11 +263,21 @@ __INIT:
    c.address[++i] = "C.ADDR1"
    c.address[++i] = "C.ADDR2"
    c.address[++i] = "C.CITY"
+   c.address[++i] = "C.CITY.DESC"
    c.address[++i] = "C.STATE"
    c.address[++i] = "C.ZIP"
    c.address[++i] = "C.AREACODE"
    c.address[++i] = "C.TEL"
    
+   i = 0
+   'mailing address record
+   mail.dst[++i] = "C.ML.ADDR1"
+   mail.dst[++i] = "C.ML.ADDR2"
+   mail.dst[++i] = "C.ML.CITY"
+   mail.dst[++i] = "C.ML.CITY.DESC"
+   mail.dst[++i] = "C.ML.STATE"
+   mail.dst[++i] = "C.ML.ZIP"
+
    'responsible party record
    i = 0
    rp.dst[++i] = "C.RP.FN"
@@ -254,6 +319,7 @@ __INIT:
    if $loadlib(l-c.dst, "lib_DST") > 0 then return endif
    if $loadlib(l-c.address, "lib_DST") > 0 then return endif
    if $loadlib(l-rp.dst, "lib_DST") > 0 then return endif
+   if $loadlib(l-mail.dst, "lib_DST") > 0 then return endif
    'if $loadlib(l-fs.dst, "lib_DST") > 0 then return endif
    if $loadlib(l-ic.dst, "lib_DST") > 0 then return endif
    
@@ -263,14 +329,10 @@ __INIT:
    c.dst.new[] = c.dst.val[]
    
    'client address
-   rc = l-c.address:read(client, c.address[])
-   c.address.val[] = l-c.address:dst(c.address[])
-   c.address.new[] = c.address.val[]
-   
+   gosub _READADDRESS
+
    'responsible party
-   rc = l-rp.dst:read(client, rp.dst[])
-   rp.val[] = l-rp.dst:dst(rp.dst[])
-   rp.new[] = rp.val[]
+   gosub _READRP
    
    'eligibility record
    'rc = l-fs.dst:read(client, fs.dst[])
@@ -282,14 +344,71 @@ __INIT:
    ic.new[] = ic.val[]
 
 goback
+
+_READADDRESS:
+   rc = l-c.address:read(client, c.address[])
+   c.address.val[] = l-c.address:dst(c.address[])
+   if (c.address.new[] !dp) then
+      c.address.new[] = c.address.val[]
+   endif
+goback
+
+_READMAIL:
+   rc = l-mail.dst:read(client, mail.dst[])
+   mail.val[] = l-mail.dst:dst(mail.dst[])
+   if (mail.new[] !dp) then
+      mail.new[] = mail.val[]
+   endif
+goback
+
+_READRP:
+   rc = l-rp.dst:read(client, rp.dst[])
+   rp.val[] = l-rp.dst:dst(rp.dst[])
+   if rp.new[] !dp then
+      rp.new[] = rp.val[]
+   endif
+goback
+
+_BROWSERDATA: 
+   'send some json data to the browser
+   data = "<script>"
+   data += "var gcc = {};"
+   data += "gcc.data = {clientid: '" + client + "', "
+   data += "address: {"
+   data += "lib: " + l-c.address + ", " 
+   rc = $putds(c.address[], delimstring, ",", x"22")
+   data += "dsts: [" + delimstring + "],"
+   rc = $putds(c.address.new[], delimstring, ",", x"22")
+   data += "vals: [" + delimstring + "]"
+   data += "},"
+   data += "mail: {"
+   data += "lib: " + l-mail.dst + ", " 
+   rc = $putds(mail.dst[], delimstring, ",", x"22")
+   data += "dsts: [" + delimstring + "],"
+   rc = $putds(mail.new[], delimstring, ",", x"22")
+   data += "vals: [" + delimstring + "]"
+   data += "},"
+   data += "rp: {"
+   data += "lib: " + l-rp.dst + ","
+   rc = $putds(rp.dst[], delimstring, ",", x"22")
+   data += "dsts: [" + delimstring + "],"
+   rc = $putds(rp.new[], delimstring, ",", x"22")
+   data += "vals: [" + delimstring + "]"
+   data += "}"
+   data += "};"
+   data += "</script>"
+goback
 end wr-financial
 
 %include inc_GetParm
 %include inc_GetOption
 %include inc_uhp
 
-dynamic FUNCTION putNewAddress(-lib, -client, 
+dynamic FUNCTION putNewRp(-lib, -client, 
+   -first, -first-dst,
+   -last, -last-dst,
    -street, -street-dst,
+   -street2, -street2-dst,
    -city, -city-dst,
    -state, -state-dst,
    -zip, -zip-dst
@@ -297,24 +416,88 @@ dynamic FUNCTION putNewAddress(-lib, -client,
 
 -lib           is b
 -client        is x
+-first         is x
+-last          is x
 -street        is x
+-street2       is x
 -city          is x
 -state         is x
 -zip           is x
+-first-dst     is x
+-last-dst      is x
+-street-dst    is x
+-street2-dst   is x
+-city-dst      is x
+-state-dst     is x
+-zip-dst       is x
+
+rc             is b
+rp-dsts[] is x
+rp-vals[] is x
+
+rc = $arrpush(rp-dsts[], -first-dst)
+rc = $arrpush(rp-dsts[], -last-dst)
+rc = $arrpush(rp-dsts[], -street-dst)
+rc = $arrpush(rp-dsts[], -city-dst)
+rc = $arrpush(rp-dsts[], -state-dst)
+rc = $arrpush(rp-dsts[], -zip-dst)
+
+rc = $arrpush(rp-vals[], -first)
+rc = $arrpush(rp-vals[], -last)
+rc = $arrpush(rp-vals[], -street)
+rc = $arrpush(rp-vals[], -city)
+rc = $arrpush(rp-vals[], -state)
+rc = $arrpush(rp-vals[], -zip)
+
+rc = -lib:add(-client, rp-dsts[], rp-vals[])
+
+putNewRp = rc
+
+end putNewRp
+
+dynamic FUNCTION putNewAddress(-lib, -client, 
+   -street, -street-dst,
+   -street2, -street2-dst,
+   -city, -city-dst,
+   -city-desc, -city-desc-dst,
+   -state, -state-dst,
+   -zip, -zip-dst
+) is b
+
+-lib           is b
+-client        is x
+-street        is x
+-street2       is x
+-city          is x
+-city-desc     is x
+-state         is x
+-zip           is x
+-street-dst    is x
+-street2-dst   is x
+-city-dst      is x
+-city-desc-dst is x
+-state-dst     is x
+-zip-dst       is x
 
 rc             is b
 address-dsts[] is x
 address-vals[] is x
 
-rc = $arrpush(address-dsts[], -street-dst)
-rc = $arrpush(address-dsts[], -city-dst)
-rc = $arrpush(address-dsts[], -state-dst)
-rc = $arrpush(address-dsts[], -zip-dst)
+rc = 0
+address-dsts[++rc] = -street-dst
+address-dsts[++rc] = -street2-dst
+address-dsts[++rc] = -city-dst
+address-dsts[++rc] = -city-desc-dst
+address-dsts[++rc] = -state-dst
+address-dsts[++rc] = -zip-dst
 
-rc = $arrpush(address-vals[], -street)
-rc = $arrpush(address-vals[], -city)
-rc = $arrpush(address-vals[], -state)
-rc = $arrpush(address-vals[], -zip)
+rc = 0
+address-vals[++rc] = -street
+address-vals[++rc] = -street2
+address-vals[++rc] = -city
+address-vals[++rc] = -city-desc
+address-vals[++rc] = -state
+address-vals[++rc] = -zip
 
 rc = -lib:add(-client, address-dsts[],address-vals[])
 

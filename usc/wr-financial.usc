@@ -47,6 +47,8 @@ services[]        is x
 
 template          is x
 report            is x
+form-view         is x
+report-view       is x
 
 l-c.dst           is b
 l-c.address       is b
@@ -125,7 +127,8 @@ gosub __INIT
 'uhp template
 do while 1 = 1
    gosub _PRE
-   uhp(template)
+   'uhp(template)
+   uhp(form-view)
    
    select $endbutton
       case "CANCEL" return
@@ -174,7 +177,8 @@ _VALIDATE:
    
    'if validated
    gosub _ELIGSTR
-   uhp(report)
+   'uhp(report)
+   uhp(report-view)
    select $endbutton
       case "CANCEL" 
         or "SUBMIT" goback
@@ -247,8 +251,10 @@ __INIT:
    endif
    
    'default the var names
-   template = "/c1/FRSH/CUST/forms/wr-financial.uhp"
-   report = "/c1/FRSH/CUST/forms/wr-financial-rpt.uhp"
+   'template = "/c1/FRSH/CUST/forms/wr-financial.uhp"
+   template = "wr-financial.uhp"
+   'report = "/c1/FRSH/CUST/forms/wr-financial-rpt.uhp"
+   report = "wr-financial-rpt.uhp"
    
    'use c.dst for standalone client dsts
    i = 0
@@ -311,6 +317,12 @@ __INIT:
    getparm(parmfile)
    getoption(option)
    
+   form-view = "lib_uhp":checkfile(template)
+   report-view = "lib_uhp":checkfile(report)
+
+   if form-view !dp then return endif
+   if report-view !dp then return endif
+
    (void)$loadlib(l-client, "lib_CLIENT")
    'get the regid
    if l-client:pickClient(client,"Y") > 0 then return endif

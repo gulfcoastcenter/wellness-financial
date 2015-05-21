@@ -48,8 +48,8 @@
             <div>Address: <$literal value='c.address.new' idx='1' />
             <$literal value='c.address.new' idx='2' />         </div>
             <div>City: <$literal value='c.address.new' idx='3' />
-            State: <$literal value='c.address.new' idx='4' />
-            Zip: <$literal value='c.address.new' idx='5' />    </div>
+            State: <$literal value='c.address.new' idx='5' />
+            Zip: <$literal value='c.address.new' idx='6' />    </div>
          </div>
       </div>
       <div class='section'>
